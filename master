@@ -1,6 +1,105 @@
-git init
-git add .
-git commit -m "Initial commit - World Cup 2026 Predictor"
-git branch -M main
-git remote add origin https://github.com/oeyoel/worldcup2026_forecast.git
-git push -u origin main
+import os
+import zipfile
+from pathlib import Path
+
+# --- Folder structure ---
+structure = {
+    "data": {
+        "fifa_elo_ratings.csv": """Team,Elo,Confederation
+Brazil,2100,CONMEBOL
+France,2080,UEFA
+Argentina,2050,CONMEBOL
+England,2000,UEFA
+Spain,1980,UEFA
+Germany,1950,UEFA
+USA,1850,CONCACAF
+Mexico,1820,CONCACAF
+Netherlands,1940,UEFA
+Portugal,1930,UEFA"""
+    },
+    "models": {
+        "elo_model.py": """import numpy as np
+import pandas as pd
+
+def win_probability(elo_a, elo_b):
+    return 1 / (1 + 10 ** (-(elo_a - elo_b) / 400))
+
+def simulate_tournament(df, n_sims=1000):
+    results = {team: 0 for team in df['Team']}
+    teams = df['Team'].tolist()
+    for _ in range(n_sims):
+        remaining = teams.copy()
+        while len(remaining) > 1:
+            winners = []
+            np.random.shuffle(remaining)
+            for i in range(0, len(remaining), 2):
+                if i + 1 >= len(remaining):
+                    winners.append(remaining[i])
+                else:
+                    a, b = remaining[i], remaining[i+1]
+                    elo_a = df.loc[df.Team == a, 'Elo'].values[0]
+                    elo_b = df.loc[df.Team == b, 'Elo'].values[0]
+                    p = win_probability(elo_a, elo_b)
+                    winners.append(a if np.random.rand() < p else b)
+            remaining = winners
+        results[remaining[0]] += 1
+    probs = pd.DataFrame(results.items(), columns=["Team", "Win_Prob"])
+    probs["Win_Prob"] /= n_sims
+    return probs.sort_values(by="Win_Prob", ascending=False)
+"""
+    },
+    "pipeline": {
+        "data_loader.py": """import pandas as pd
+def load_team_data(path="data/fifa_elo_ratings.csv"):
+    df = pd.read_csv(path)
+    return df
+"""
+    },
+    "utils": {
+        "helpers.py": """import plotly.express as px
+def plot_win_probs(df):
+    fig = px.bar(df, x="Team", y="Win_Prob", title="World Cup 2026 Win Probabilities")
+    fig.update_layout(xaxis_title="Team", yaxis_title="Probability")
+    return fig
+"""
+    },
+    "app": {
+        "dashboard.py": """import streamlit as st
+from pipeline.data_loader import load_team_data
+from models.elo_model import simulate_tournament
+from utils.helpers import plot_win_probs
+
+st.title("⚽ World Cup 2026 Winner Predictor")
+
+df = load_team_data()
+
+st.sidebar.header("Simulation Settings")
+n_sims = st.sidebar.slider("Number of Simulations", 100, 5000, 1000, 100)
+
+if st.button("Run Simulation"):
+    results = simulate_tournament(df, n_sims)
+    st.plotly_chart(plot_win_probs(results))
+    st.dataframe(results)
+else:
+    st.info("👈 Choose simulation settings, then click 'Run Simulation'")
+"""
+    },
+    ".": {
+        "requirements.txt": "streamlit\npandas\nnumpy\nplotly\n",
+        "main.py": "# Placeholder main script\nprint('Run Streamlit with: streamlit run app/dashboard.py')"
+    }
+}
+
+# --- Build folders and files ---
+root = Path("worldcup2026_forecast")
+if root.exists():
+    import shutil; shutil.rmtree(root)
+root.mkdir()
+
+for folder, files in structure.items():
+    folder_path = root / folder
+    if folder != ".":
+        folder_path.mkdir(parents=True, exist_ok=True)
+    for filename, content in files.items():
+        file_path = folder_path / filename if folder != "." else root / filename
+        file_path.write_text(content)
