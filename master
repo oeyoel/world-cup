@@ -2,5 +2,5 @@ git init
 git add .
 git commit -m "Initial commit - World Cup 2026 Predictor"
 git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/worldcup2026_forecast.git
+git remote add origin https://github.com/oeyoel/worldcup2026_forecast.git
 git push -u origin main
